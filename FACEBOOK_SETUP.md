@@ -38,6 +38,31 @@ The default origin is `https://impala-hub-marketing.vercel.app`. If the producti
 
 Verify the timer from an authenticated administrator session with `supabase.rpc('marketing_publish_scheduler_status')`, or inspect `cron.job` in the SQL editor for the `marketing-publish-due` job. `configured` and `active` must both be true. The migration cannot invent a Vercel secret: a missing Vault token leaves the job unconfigured instead of sending unauthenticated requests. Check Supabase Cron run history and `net._http_response` for failures; HTTP request IDs are returned by the dispatcher.
 
+## Refresh performance
+
+Facebook refresh checks the most recent 100 Page posts with three post workers.
+The workers run independently, while attachment and insight requests inside each
+worker remain sequential, limiting concurrent Facebook/CDN requests to three per
+refresh. Existing local posts are fetched in one batch. Complete attachment data
+from the Page response is reused, avoiding an extra lookup for ordinary image or
+text posts. Optional insight fallbacks remain supported.
+
+Sync has a four-minute work budget inside its existing five-minute Vercel limit.
+Graph and Supabase requests have 20-second bounds; CDN requests retain their
+15-second limit and share the run cancellation signal. Workers stop accepting new
+posts on failure, cancellation or provider throttling, and all active workers are
+drained before the response is returned.
+
+A time-limited or throttled run reports how many posts were checked and does not
+advance the last-successful-update time. Refresh again to continue; throttling asks
+you to wait first. Unattempted and older posts are prioritized on the next refresh
+to avoid rechecking already-completed posts first. Missing optional
+insights retain previously saved counters rather than resetting them to null.
+Provider error text and tokens are not included in the returned metric diagnostics.
+Database identity locking and preservation of local titles/campaigns are unchanged.
+
+This change needs the Vercel deployment only; it adds no migration or secret.
+
 ## Multiple images
 
 Attach up to ten images to a post (JPG, PNG, WEBP or GIF, up to 15 MB each). The editor checks the whole selection before uploading and reports errors inside the dialog. Save, Publish now and Schedule support multiple images.

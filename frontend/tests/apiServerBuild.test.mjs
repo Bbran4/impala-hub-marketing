@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -44,10 +44,6 @@ test("every API handler is type-checked, imports and rejects unsupported methods
       await handler({ method: "TRACE", headers: {} }, response);
       assert.equal(code, 405, `${name} starts and rejects unsupported methods`);
     }
-    assert.match(
-      readFileSync(path.join(output, "api/marketing/facebook/sync.js"), "utf8"),
-      /from ['"]\.\/_media\.js['"]/,
-    );
     // Exercise every employee endpoint's missing-token path with configured server settings.
     const values = {
       SUPABASE_URL: "https://project.example",

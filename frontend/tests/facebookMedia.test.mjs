@@ -40,3 +40,15 @@ test('streamed size limits and failed uploads retain only existing bucket images
   assert.equal(result.unavailable,1);assert.deepEqual(result.media,[retained]);assert.equal(db.uploads.length,0)
  } finally {globalThis.fetch=old}
 })
+
+test('run cancellation interrupts media download instead of continuing through the remaining images',async()=>{
+ const old=globalThis.fetch,controller=new AbortController();let calls=0
+ globalThis.fetch=async(_url,options)=>{
+   calls++;assert.ok(options.signal instanceof AbortSignal);controller.abort(new DOMException('Sync budget expired','TimeoutError'));throw controller.signal.reason
+ }
+ try{
+  const db=storage()
+  await assert.rejects(copyFacebookMedia(db.admin,'post',['https://scontent.fbcdn.net/one','https://scontent.fbcdn.net/two'],[],controller.signal),/budget expired/)
+  assert.equal(calls,1);assert.equal(db.uploads.length,0)
+ }finally{globalThis.fetch=old}
+})

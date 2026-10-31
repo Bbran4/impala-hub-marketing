@@ -284,7 +284,13 @@ export function useMarketingWorkspace({
           ? `Facebook error: ${r.facebook.detail || "unknown error"}`
           : r.facebook?.status === "not_connected"
             ? "Facebook not connected"
-            : `Facebook synced (${r.facebook.items || 0} new, ${r.facebook.fetched || 0} checked${r.facebook.metricsUnavailable ? `; metrics unavailable for ${r.facebook.metricsUnavailable}${r.facebook.metricsErrors?.[0] ? `: ${r.facebook.metricsErrors[0]}` : ""}` : ""})`;
+            : r.facebook?.status === "partial"
+              ? String(r.facebook.processed || 0) +
+                " of " +
+                String(r.facebook.fetched || 0) +
+                " Facebook posts checked. " +
+                (r.facebook.detail || "Refresh again to continue.")
+              : `Facebook synced (${r.facebook.items || 0} new, ${r.facebook.fetched || 0} checked${r.facebook.metricsUnavailable ? `; ${r.facebook.metricsUnavailable} metric requests unavailable${r.facebook.metricsErrors?.[0] ? `: ${r.facebook.metricsErrors[0]}` : ""}` : ""})`;
       const ig =
         r.instagram?.status === "synced"
           ? `Instagram synced (${r.instagram.items} items)`
@@ -310,7 +316,8 @@ export function useMarketingWorkspace({
               : item,
           ),
         );
-      if (r.facebook?.status === "synced") setMonth(null);
+      if (r.facebook?.status === "synced" || r.facebook?.status === "partial")
+        setMonth(null);
       await load();
     } catch (e) {
       handleError(e);

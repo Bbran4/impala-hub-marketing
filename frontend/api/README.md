@@ -24,3 +24,10 @@ Marketing scheduled publishing is invoked by the Supabase two-minute timer insta
 The reconciliation endpoint only reads Facebook to verify an outcome; it never publishes. Its server-only database transaction checks the attempt/version, records the administrator review, and clears the related unread alerts.
 
 Manual and scheduled publishers share the multi-photo flow in `_publishing.ts`: stage unpublished photos, then dispatch one feed post. `src/facebookPostMedia.ts` shares attachment validation with the editor. The scheduler budgets all photo requests before claiming work; manual publishing also has a 300-second limit.
+
+Facebook sync uses `_sync.ts` for its three-worker queue and aggregate outcomes.
+The queue drains in-flight tasks even when another fails. Only a fully completed
+run saves `last_synced_at`; partial responses carry processed/remaining counts.
+The sync-only admin client passes a shared run deadline and per-request timeout
+to PostgREST and Storage. Existing callers of `createAdminClient` keep their prior
+configuration when no signal is supplied. No new deployable API route is added.

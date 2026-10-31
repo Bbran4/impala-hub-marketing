@@ -9,13 +9,31 @@ const authOptions = { persistSession: false, autoRefreshToken: false } as const;
 export function createAdminClient(
   settings: ServerSettings = serverSettings(),
   factory: ServerClientFactory = createClient,
+  signal?: AbortSignal,
 ) {
   requireSettings(
     settings,
     ["url", "serviceRoleKey"],
     "Supabase server configuration is incomplete.",
   );
-  return factory(settings.url, settings.serviceRoleKey, { auth: authOptions });
+  return factory(settings.url, settings.serviceRoleKey, {
+    auth: authOptions,
+    ...(signal
+      ? {
+          global: {
+            fetch: (input, init) =>
+              fetch(input, {
+                ...init,
+                signal: AbortSignal.any([
+                  signal,
+                  AbortSignal.timeout(20_000),
+                  ...(init?.signal ? [init.signal] : []),
+                ]),
+              }),
+          },
+        }
+      : {}),
+  });
 }
 export function createUserClient(
   settings: ServerSettings,

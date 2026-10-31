@@ -1,205 +1,46 @@
-import { withApiErrors, requireMethod } from "../../_lib/http.ts";
+import { withApiErrors, requireMethod, HttpError } from "../../_lib/http.ts";
 import { requireMarketingSession } from "../../_lib/auth.ts";
-import { copyFacebookMedia } from "./_media.js";
+import { createAdminClient } from "../../_lib/supabase.ts";
 import { decryptToken } from "../../_lib/metaCrypto.ts";
-import { facebookGraphUrl } from "../../_lib/facebook.ts";
-const timedFetch = (url: string) =>
-  fetch(url, { signal: AbortSignal.timeout(20_000) });
+import { syncFacebookPage, SYNC_WORK_MS } from "./_sync.ts";
 export default withApiErrors(async (req, res) => {
   requireMethod(req, ["POST"]);
-  const { admin, user, settings } = await requireMarketingSession(
-    req,
-    "workspace",
-    {
-      required: ["encryptionKey"],
-      configurationMessage: "Facebook sync server configuration is incomplete.",
-    },
-  );
-  const encryptionKey = settings.encryptionKey;
-  const { data: connection } = await admin
-    .from("provider_connections")
-    .select("*")
-    .eq("provider", "facebook")
-    .eq("is_workspace_connection", true)
-    .maybeSingle();
-  if (!connection?.page_id || !connection.token_ciphertext)
-    return res.status(409).json({ detail: "Facebook is not connected." });
+  const { user, settings } = await requireMarketingSession(req, "workspace", {
+    required: ["encryptionKey"],
+    configurationMessage: "Facebook sync server configuration is incomplete.",
+  });
+  const signal = AbortSignal.timeout(SYNC_WORK_MS);
+  const admin = createAdminClient(settings, undefined, signal);
   try {
-    const pageToken = decryptToken(connection.token_ciphertext, encryptionKey);
-    const fields =
-      "id,message,created_time,permalink_url,full_picture,attachments{media,subattachments},likes.limit(0).summary(true),comments.limit(0).summary(true),shares";
-    const response = await timedFetch(
-      facebookGraphUrl(
-        `${connection.page_id}/published_posts?limit=100&fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(pageToken)}`,
-      ),
-    );
-    const result = await response.json();
-    if (!response.ok)
-      return res
-        .status(502)
-        .json({ detail: "Facebook rejected the sync request." });
-    let imported = 0;
-    let mediaUnavailable = 0;
-    let audience: number | null = null;
-    try {
-      const pageResponse = await timedFetch(
-        facebookGraphUrl(
-          `me?fields=id,name,followers_count&access_token=${encodeURIComponent(pageToken)}`,
-        ),
-      );
-      const pageData = await pageResponse.json();
-      audience = pageData.followers_count ?? pageData.fan_count ?? null;
-      if (audience != null)
-        await admin
-          .from("provider_connections")
-          .update({ followers_count: audience })
-          .eq("id", connection.id);
-    } catch {
-      /* Audience is optional. */
-    }
-    let metricsUnavailable = 0;
-    const metricsErrors: string[] = [];
-    for (const item of result.data || []) {
-      const { data: existing } = await admin
-        .from("posts")
-        .select("id,media")
-        .contains("provider_ids", { facebook: item.id })
-        .limit(1)
-        .maybeSingle();
-      let attachments = (item.attachments?.data || []).flatMap(
-        (attachment: any) => [
-          attachment,
-          ...(attachment.subattachments?.data || []),
-        ],
-      );
-      if (attachments.length < 2) {
-        try {
-          const attachmentResponse = await timedFetch(
-            facebookGraphUrl(
-              `${encodeURIComponent(item.id)}/attachments?fields=media,subattachments&access_token=${encodeURIComponent(pageToken)}`,
-            ),
-          );
-          const attachmentResult = await attachmentResponse.json();
-          attachments = (attachmentResult.data || []).flatMap(
-            (attachment: any) => [
-              attachment,
-              ...(attachment.subattachments?.data || []),
-            ],
-          );
-        } catch {
-          /* Keep the attachment data returned by published_posts. */
-        }
-      }
-      const urls = attachments.flatMap((attachment: any) =>
-        attachment.media?.image?.src ? [attachment.media.image.src] : [],
-      );
-      if (!urls.length && item.full_picture) urls.push(item.full_picture);
-      const copied = await copyFacebookMedia(
-        admin,
-        item.id,
-        urls,
-        existing?.media || [],
-      );
-      const media = copied.media;
-      mediaUnavailable += copied.unavailable;
-      const insights: Record<string, number> = {};
-      const metricFallbacks: Array<[string, string[]]> = [
-        ["views", ["post_media_view", "post_impressions"]],
-        ["reach", ["post_total_media_view_unique", "post_impressions_unique"]],
-        ["clicks", ["post_clicks"]],
-      ];
-      for (const [target, metricNames] of metricFallbacks) {
-        for (const metricName of metricNames) {
-          if (insights[target] != null) break;
-          try {
-            const insightResponse = await timedFetch(
-              facebookGraphUrl(
-                `${encodeURIComponent(item.id)}/insights?metric=${metricName}&access_token=${encodeURIComponent(pageToken)}`,
-              ),
-            );
-            const insightData = await insightResponse.json();
-            const value = insightData.data?.[0]?.values?.[0]?.value;
-            if (!insightResponse.ok || insightData.error || value == null) {
-              metricsUnavailable += 1;
-              if (metricsErrors.length < 3)
-                metricsErrors.push(
-                  `${metricName}: ${insightData.error?.message || `HTTP ${insightResponse.status}`}`,
-                );
-            } else
-              insights[target] =
-                typeof value === "object"
-                  ? Object.values(value).reduce<number>(
-                      (sum, entry) => sum + Number(entry || 0),
-                      0,
-                    )
-                  : Number(value || 0);
-          } catch {
-            metricsUnavailable += 1;
-          }
-        }
-      }
-      const values = {
-        caption: item.message || "",
-        channels: ["facebook"],
-        status: "published",
-        published_at: item.created_time,
-        media,
-        provider_ids: {
-          facebook: item.id,
-          ...(item.permalink_url ? { permalink: item.permalink_url } : {}),
-        },
-        likes: item.likes?.summary?.total_count || 0,
-        comments: item.comments?.summary?.total_count || 0,
-        shares: item.shares?.count || 0,
-        impressions: insights.views ?? null,
-        reach: insights.reach ?? null,
-        views: insights.views ?? null,
-        clicks: insights.clicks ?? null,
-        metrics_refreshed_at: new Date().toISOString(),
-      };
-      // Serialize lookup/insert in the database; preserve all local editorial fields.
-      const saved = await admin.rpc("sync_facebook_post", {
-        p_values: values,
-        p_actor: user.id,
-      });
-      if (saved.error)
-        return res
-          .status(saved.error.code === "PGRST202" ? 503 : 500)
-          .json({
-            detail:
-              saved.error.code === "PGRST202"
-                ? "The Marketing database update is missing. Apply Supabase migration 0093_marketing_publish_integrity.sql before refreshing Facebook posts."
-                : "Could not save imported Facebook post.",
-          });
-      if (!existing) imported += 1;
-    }
-    const syncedAt = new Date().toISOString();
-    const completed = await admin
+    const { data: connection, error } = await admin
       .from("provider_connections")
-      .update({ last_synced_at: syncedAt })
-      .eq("id", connection.id)
-      .select("id")
+      .select("*")
+      .eq("provider", "facebook")
+      .eq("is_workspace_connection", true)
       .maybeSingle();
-    if (completed.error || !completed.data)
-      return res
-        .status(500)
-        .json({
-          detail:
-            "Facebook posts were refreshed, but the last-update time could not be saved. Please refresh again.",
-        });
+    if (error)
+      throw new HttpError(500, "Could not load the Facebook connection.");
+    if (!connection?.page_id || !connection.token_ciphertext)
+      return res.status(409).json({ detail: "Facebook is not connected." });
+    const token = decryptToken(
+      connection.token_ciphertext,
+      settings.encryptionKey,
+    );
+    const result = await syncFacebookPage(
+      admin,
+      user.id,
+      connection,
+      token,
+      signal,
+    );
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     return res
-      .status(200)
+      .status(502)
       .json({
-        status: "synced",
-        items: imported,
-        fetched: (result.data || []).length,
-        metricsUnavailable,
-        metricsErrors,
-        audience,
-        mediaUnavailable,
-        syncedAt,
+        detail:
+          "Facebook sync failed. Check post statuses before refreshing again.",
       });
-  } catch {
-    return res.status(502).json({ detail: "Facebook sync failed." });
   }
 });

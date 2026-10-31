@@ -28,6 +28,8 @@ export type SyncResult = {
   detail?: string;
   items?: number;
   fetched?: number;
+  processed?: number;
+  remaining?: number;
   metricsUnavailable?: number;
   metricsErrors?: string[];
   mediaUnavailable?: number;
