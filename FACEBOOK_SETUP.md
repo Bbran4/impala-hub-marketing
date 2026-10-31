@@ -24,7 +24,21 @@ The UI also needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Priva
 4. Check the connection and refresh posts. Confirm the Page identity, post previews, metrics availability and last successful update time.
 5. Publish a controlled test post only when authorized. Verify the confirmed result and provider link before relying on scheduling.
 
-The deployment's cron schedule is defined in `frontend/vercel.json`; due posts are processed on that schedule. Timeouts or interrupted publishing can produce `publish_unknown`, which requires checking Facebook before retrying.
+## Scheduled publishing
+
+Migration `0113_marketing_publish_scheduler.sql` installs the Supabase `marketing-publish-due` job every two minutes using `pg_cron` and `pg_net`. The daily Vercel cron entry is removed. `frontend/vercel.json` gives both `publish-due` and `sync` 300 seconds; publishing stops taking new work after four minutes. Atomic per-post claims make overlapping runs safe.
+
+The job reads `marketing_publish_cron_secret` from Supabase Vault, falling back to the existing Reporting secret `report_emails_cron_secret`. It must match Vercel's `CRON_SECRET`. If Reporting scheduling already configured that secret, no duplicate credential is needed. Otherwise, set it once in the Supabase SQL editor (never commit the value):
+
+```sql
+select vault.create_secret('<the CRON_SECRET from Vercel>', 'marketing_publish_cron_secret');
+```
+
+The default origin is `https://impala-hub-marketing.vercel.app`. If the production domain changes, store the new HTTPS origin in Vault as `marketing_publish_base_url`. A browser cannot read the cron token or call the private dispatcher.
+
+Verify the timer from an authenticated administrator session with `supabase.rpc('marketing_publish_scheduler_status')`, or inspect `cron.job` in the SQL editor for the `marketing-publish-due` job. `configured` and `active` must both be true. The migration cannot invent a Vercel secret: a missing Vault token leaves the job unconfigured instead of sending unauthenticated requests. Check Supabase Cron run history and `net._http_response` for failures; HTTP request IDs are returned by the dispatcher.
+
+Timeouts or interrupted publishing can produce `publish_unknown`, which requires checking Facebook before retrying.
 
 Disconnecting removes the saved connection through the app. Revoke access in Facebook Business Integrations separately when required. Instagram and WhatsApp connectivity remain deferred.
 

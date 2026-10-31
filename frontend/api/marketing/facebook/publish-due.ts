@@ -15,6 +15,7 @@ export default withApiErrors(async (req, res) => {
   const admin = createAdminClient(settings),
     encryptionKey = settings.encryptionKey;
   try {
+    const deadline = Date.now() + 240_000;
     const now = new Date().toISOString();
     const recovered = await admin
       .from("posts")
@@ -47,6 +48,8 @@ export default withApiErrors(async (req, res) => {
     if (connection.error) throw connection.error;
     const results = [];
     for (const candidate of due || []) {
+      // Leave time to finish and persist the in-flight publication.
+      if (Date.now() >= deadline) break;
       const post = await claimPost(
         admin,
         candidate.id,

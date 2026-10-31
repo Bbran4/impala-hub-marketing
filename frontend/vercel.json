@@ -1,14 +1,14 @@
 {
-  "crons": [
-    {
-      "path": "/api/marketing/facebook/publish-due",
-      "schedule": "0 6 * * *"
-    }
-  ],
   "functions": {
     "api/reporting/send-due.ts": {
       "maxDuration": 300,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    },
+    "api/marketing/facebook/publish-due.ts": {
+      "maxDuration": 300
+    },
+    "api/marketing/facebook/sync.ts": {
+      "maxDuration": 300
     }
   }
 }

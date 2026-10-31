@@ -18,3 +18,5 @@ Employee handlers use `requireMarketingSession` with an explicit `workspace`, `a
 The token format remains compatible with existing saved connections: base64 IV, authentication tag and ciphertext separated by dots, using AES-256-GCM and a base64-encoded 32-byte `META_TOKEN_ENCRYPTION_KEY`. Do not rotate that key as part of a code refactor.
 
 New local server imports use explicit `.ts` paths; the project's TypeScript configuration rewrites them to `.js` in compiled output. The server startup test compiles and imports all Marketing handlers, including shared dependencies, and checks their method/authentication boundaries. Keep these checks when adding handlers.
+
+Marketing scheduled publishing is invoked by the Supabase two-minute timer installed in migration `0113`, using a Vault-backed `CRON_SECRET`. See `FACEBOOK_SETUP.md` for configuration and verification. Both publishing and sync have a 300-second Vercel limit.
