@@ -1,5 +1,11 @@
 # Marketing publishing integrity rollout
 
+Post history excludes metric-only updates, including clicks, reach, impressions,
+views, likes, comments, shares, reactions, engagements, saves and refresh timestamps
+(migration `0121_marketing_history_metric_noise.sql`). Mixed edits produce one
+event listing only editorial/lifecycle fields. Creation, deletion, campaign changes
+and publishing receipts remain audited; existing history is retained.
+
 The Supabase GitHub integration applies database migrations for the connected branch; confirm its migration run succeeded alongside the Vercel deployment. Migration `0093_marketing_publish_integrity.sql` established the lifecycle protections below.
 
 If migration 0093 reports duplicate Facebook identities, reconcile those records first. It intentionally preserves all rows rather than guessing which title, campaign assignment or owner should survive. Find conflicts with:
