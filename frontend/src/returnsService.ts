@@ -15,6 +15,12 @@ import {
 } from "./returnsWorkflow";
 import { AuthError, checkError, resultData } from "./serviceTransport";
 import { requireSupabase, supabase } from "./supabase";
+import {
+  collectExportPages,
+  type ClaimFilters,
+  type ClaimSummary,
+  type RecordPage,
+} from "./recordPaging";
 export type * from "./returnsTypes";
 const claimFields = [
   "date",
@@ -50,6 +56,22 @@ export function claimWriteValues(values: ClaimInput) {
   };
 }
 export function createReturnsService(client: SupabaseClient | null = supabase) {
+  const list = async (
+    filters: ClaimFilters = {},
+    offset = 0,
+    limit = 50,
+    summary = true,
+  ): Promise<RecordPage<Claim> & { summary: ClaimSummary | null }> => {
+    const dbClient = requireSupabase(client);
+    return resultData(
+      await dbClient.rpc("returns_claim_page", {
+        p_filters: filters,
+        p_offset: offset,
+        p_limit: limit,
+        p_summary: summary,
+      }),
+    );
+  };
   // Authorization is enforced by the database policies and transactional triggers.
   const currentUser = async () => {
     const dbClient = requireSupabase(client);
@@ -59,21 +81,9 @@ export function createReturnsService(client: SupabaseClient | null = supabase) {
     return data.session.user;
   };
   return {
-    async list(): Promise<Claim[]> {
-      const dbClient = requireSupabase(client);
-      return (
-        await loadAllRows<Claim>((from, to) =>
-          dbClient
-            .from("returns_claims")
-            .select("*", { count: "exact" })
-            .is("deleted_at", null)
-            .order("date", { ascending: false })
-            .order("created_at", { ascending: false })
-            .order("id")
-            .range(from, to),
-        )
-      ).data;
-    },
+    list,
+    exportRows: (filters: ClaimFilters) =>
+      collectExportPages((offset) => list(filters, offset, 200, false)),
     async detail(id: string): Promise<Claim> {
       const dbClient = requireSupabase(client);
       const [record, attachments, audit, people] = await Promise.all([

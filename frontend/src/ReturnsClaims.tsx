@@ -1,11 +1,14 @@
+import RecordPagination from './RecordPagination'
+import { useRecordPage, useDebouncedSearch } from './useRecordPage'
+import { EMPTY_CLAIM_SUMMARY } from './recordPaging'
 import { describeFieldChange } from './returnsTypes'
 import { createReturnsService, type Claim, type ClaimForm, type ClaimAttachment, type ClaimField } from './returnsService'
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, Download, Eye, Plus, Trash2, X } from "lucide-react";
 import { CLAIM_FILE_ACCEPT, validateClaimFiles } from './returnsAttachments';
 import './returnsclaims.css';
 import ReturnSupplierWorkflow from './ReturnSupplierWorkflow';
-import { allowedClaimStatuses, validateClaimStatus, johannesburgDate, claimTiming, matchesClaimDates, summarizeClaims, claimReportRows, claimsCsv } from './returnsReporting';
+import { allowedClaimStatuses, validateClaimStatus, johannesburgDate, claimTiming, claimReportRows, claimsCsv } from './returnsReporting';
 const companies = ["Warehouse", "Eastrand", "Pretoria"],
   reasons = ["Core", "Goods Damaged", "Incorrect Goods Supplied", "Claim"],
   outcomes = ["Credit", "Replacement Part"],
@@ -48,8 +51,7 @@ const blank = (): ClaimForm => ({
   });
 export default function ReturnsClaims({ token, setNotice, setError }: Props) {
   const service = useMemo(() => createReturnsService(), [token]);
-  const [rows, setRows] = useState<Claim[]>([]),
-    [panel, setPanel] = useState(false),
+  const [panel, setPanel] = useState(false),
     [readOnly, setReadOnly] = useState(false),
     [form, setForm] = useState<ClaimForm>(blank),
     [search, setSearch] = useState(""),
@@ -69,17 +71,11 @@ export default function ReturnsClaims({ token, setNotice, setError }: Props) {
   const statusReasonRequired = Boolean(originalRecord && form.status !== originalRecord.status &&
     (form.status === 'Rejected' || ['Completed','Rejected'].includes(originalRecord.status)));
 
-  const load = async () => {
-    try {
-      setRows(await service.list());
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  useEffect(() => {
-    void load();
-  }, [token]);
+  const debouncedSearch=useDebouncedSearch(search);
+  const filters=useMemo(()=>({search:debouncedSearch,status:statusFilter,outcome:outcomeFilter,company:companyFilter,reason:reasonFilter,from:dateFrom,to:dateTo,sla:slaFilter}),[debouncedSearch,statusFilter,outcomeFilter,companyFilter,reasonFilter,dateFrom,dateTo,slaFilter]);
+  const listLoader=useCallback((offset:number)=>service.list(filters,offset),[service,filters,today]);
+  const claimPage=useRecordPage<Claim,Awaited<ReturnType<typeof service.list>>>(listLoader,50,true,setError);
+  const load=async()=>claimPage.refresh();
   useEffect(() => {
     const timer = window.setInterval(() => setToday(johannesburgDate()), 60000);
     return () => window.clearInterval(timer);
@@ -191,37 +187,25 @@ export default function ReturnsClaims({ token, setNotice, setError }: Props) {
       setError((e as Error).message);
     }
   };
-  const q = search.toLowerCase();
-  const visible = rows.filter(
-    (r) =>
-      (!q || Object.values(r).join(" ").toLowerCase().includes(q)) &&
-      (!statusFilter || r.status === statusFilter) &&
-      (!outcomeFilter ||
-        (outcomeFilter === "__unknown"
-          ? !r.outcome_request
-          : r.outcome_request === outcomeFilter)) &&
-      (!companyFilter || r.company === companyFilter) &&
-      (!reasonFilter || r.reason === reasonFilter) &&
-      !(dateFrom && dateTo && dateFrom > dateTo) &&
-      matchesClaimDates(r, dateFrom, dateTo, slaFilter, today),
-  );
-  const reportSummary = summarizeClaims(visible, today);
+  const visible = claimPage.items;
+  const reportSummary = claimPage.data?.summary || EMPTY_CLAIM_SUMMARY;
   const filterDescription = `Claim date: ${dateFrom || 'Any'} to ${dateTo || 'Any'}; status: ${statusFilter || 'Any'}; outcome: ${outcomeFilter || 'Any'}; company: ${companyFilter || 'Any'}; reason: ${reasonFilter || 'Any'}; SLA: ${slaFilter || 'Any'}; search: ${search || 'None'}`;
   const exportReport = async (format: 'csv' | 'xlsx') => {
     setExporting(true);
     try {
+      const exportRows = await service.exportRows(filters);
       let blob: Blob;
-      if (format === 'csv') blob = new Blob([claimsCsv(claimReportRows(visible, today))], { type: 'text/csv;charset=utf-8' });
+      if (format === 'csv') blob = new Blob([claimsCsv(claimReportRows(exportRows, today))], { type: 'text/csv;charset=utf-8' });
       else {
         const { createClaimsWorkbook } = await import('./returnsExport');
-        const bytes = await createClaimsWorkbook(visible, today, filterDescription);
+        const bytes = await createClaimsWorkbook(exportRows, today, filterDescription);
         blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       }
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a'); link.href = url; link.download = `returns-claims-${today}.${format}`;
       document.body.appendChild(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice(`Exported ${visible.length} matching claims.`);
+      setNotice(`Exported ${exportRows.length} matching claims.`);
     } catch (e) { setError((e as Error).message); }
     finally { setExporting(false); }
   };
@@ -260,11 +244,11 @@ export default function ReturnsClaims({ token, setNotice, setError }: Props) {
         <span><b>{reportSummary.overdue}</b> overdue</span><span><b>{reportSummary.dueSoon}</b> due within 2 days</span>
         <span><b>{reportSummary.completed}</b> completed</span><span><b>{reportSummary.rejected}</b> rejected</span>
         <span><b>{reportSummary.averageAge}</b> average age (days)</span><span><b>R{reportSummary.creditReceived.toFixed(2)}</b> credits received</span>
-        <button className="secondary" disabled={exporting || !visible.length} onClick={() => void exportReport('csv')}><Download size={14} /> CSV</button>
-        <button className="secondary" disabled={exporting || !visible.length} onClick={() => void exportReport('xlsx')}><Download size={14} /> XLSX report</button>
+        <button className="secondary" disabled={exporting || search!==debouncedSearch || claimPage.loading || !claimPage.total} onClick={() => void exportReport('csv')}><Download size={14} /> CSV</button>
+        <button className="secondary" disabled={exporting || search!==debouncedSearch || claimPage.loading || !claimPage.total} onClick={() => void exportReport('xlsx')}><Download size={14} /> XLSX report</button>
         <details className="claim-report-breakdown"><summary>Report breakdown</summary>
-          <h4>By status</h4>{statuses.map(status => <span key={status}>{status}: <b>{visible.filter(row => row.status === status).length}</b> </span>)}
-          <h4>By company</h4>{companies.map(company => <span key={company}>{company}: <b>{visible.filter(row => row.company === company).length}</b> </span>)}
+          <h4>By status</h4>{statuses.map(status => <span key={status}>{status}: <b>{reportSummary.byStatus[status] || 0}</b> </span>)}
+          <h4>By company</h4>{companies.map(company => <span key={company}>{company}: <b>{reportSummary.byCompany[company] || 0}</b> </span>)}
         </details>
       </div>
       <div className="rfq-toolbar returns-claims-toolbar">
@@ -333,6 +317,7 @@ export default function ReturnsClaims({ token, setNotice, setError }: Props) {
         </label>
       </div>
       {dateFrom && dateTo && dateFrom > dateTo && <p role="alert">The start date must be on or before the end date.</p>}
+      <RecordPagination page={claimPage.page} size={50} total={claimPage.total} loading={claimPage.loading} onPage={claimPage.setPage} />
       <div className="rfq-table-wrap">
         <table className="rfq-table">
           <thead>

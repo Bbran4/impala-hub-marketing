@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeMarketingFilename } from "./marketingPosts.ts";
 import { loadAllRows } from "./pagedRows.ts";
 import { deleteRecordAttachment } from "./recordAttachments";
-import { loadRfqList } from "./recordLists.ts";
+import type { RfqFilters } from "./recordPaging";
 import type {
   AnalyticsFilters,
   ConfigKind,
@@ -137,11 +137,16 @@ export function createRfqService(client: SupabaseClient | null = supabase) {
       requireSupabase(client);
       return cachedSession!.get();
     },
-    async list(): Promise<RfqList> {
+    async list(filters: RfqFilters = {}, offset = 0): Promise<RfqList> {
       const dbClient = requireSupabase(client);
-      const rows = await loadRfqList(dbClient);
-      const items = (rows.data as RawRfq[]).map(normalizeRfq);
-      return { items, total: rows.count, limit: items.length, offset: 0 };
+      const page = resultData<Omit<RfqList, "items"> & { items: RawRfq[] }>(
+        await dbClient.rpc("sales_desk_rfq_page", {
+          p_filters: filters,
+          p_limit: 50,
+          p_offset: offset,
+        }),
+      );
+      return { ...page, items: page.items.map(normalizeRfq) };
     },
     async settingsIdentity(): Promise<SalesDeskUser> {
       return resultData<SalesDeskUser>(

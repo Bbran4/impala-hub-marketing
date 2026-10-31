@@ -130,40 +130,23 @@ test("RFQ display metadata is cached across concurrent service calls", async () 
   assert.equal(requests, 1);
 });
 
-test("RFQ list stays complete under response caps and normalizes joined fields", async () => {
-  const rows = Array.from({ length: 5 }, (_, id) => ({
-    id: String(id),
-    media_platform: { name: "Email" },
-    status: { name: "New", is_closed: false },
-    sales_code: { code: "AB" },
-  }));
-  const ranges = [];
-  const service = createRfqService({
-    auth,
-    from(table) {
-      assert.equal(table, "sales_desk_rfqs");
-      return query((calls) => {
-        assert.ok(
-          calls.some(
-            (call) =>
-              call[0] === "is" && call[1] === "deleted_at" && call[2] === null,
-          ),
-        );
-        const [, from, to] = calls.find((call) => call[0] === "range");
-        ranges.push(from);
-        return {
-          ...success(rows.slice(from, Math.min(from + 2, to + 1))),
-          count: rows.length,
-        };
-      });
-    },
-  });
-  const result = await service.list();
-  assert.deepEqual(ranges, [0, 2, 4]);
-  assert.equal(result.total, 5);
-  assert.equal(result.items.length, 5);
-  assert.equal(result.items[0].status, "New");
-  assert.equal(result.items[0].sales_code, "AB");
+test("RFQ lists request one server-filtered page and normalize joined fields",async()=>{
+  const calls=[];
+  const service=createRfqService({rpc(name,args){calls.push([name,args]);return success({items:[{id:'one',media_platform:{name:'Email'},status:{name:'New',is_closed:false},sales_code:{code:'AB'}}],total:1501,limit:50,offset:100})}});
+  const result=await service.list({search:'Customer',sort:'received_desc'},100);
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'sales_desk_rfq_page');
+  assert.deepEqual(calls[0][1],{p_filters:{search:'Customer',sort:'received_desc'},p_limit:50,p_offset:100});
+  assert.equal(result.items.length,1);assert.equal(result.total,1501);assert.equal(result.items[0].status,'New');assert.equal(result.items[0].sales_code,'AB');
+});
+
+test("Returns lists use bounded filtered RPCs and only exports request subsequent pages",async()=>{
+  const calls=[];
+  const service=createReturnsService({rpc(name,args){calls.push([name,args]);return success({items:[{id:String(args.p_offset)}],total:3,limit:args.p_limit,offset:args.p_offset,summary:{total:3}})}});
+  const filters={status:'In Progress',sla:'overdue',search:'customer'};
+  const page=await service.list(filters,50);assert.equal(page.total,3);assert.equal(calls.length,1);
+  assert.deepEqual(calls[0],['returns_claim_page',{p_filters:filters,p_offset:50,p_limit:50,p_summary:true}]);
+  calls.length=0;const rows=await service.exportRows(filters);assert.equal(rows.length,3);assert.equal(calls.length,3);
+  assert.ok(calls.every(([,args])=>args.p_summary===false && args.p_limit===200 && args.p_filters===filters));
 });
 
 test("claim writes exclude identities, history and browser metadata; normalize supplier receipts", async () => {

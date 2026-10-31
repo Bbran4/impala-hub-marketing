@@ -13,7 +13,7 @@ insert into public.profile_roles(profile_id,role_id) values
 ('16000000-0000-0000-0000-000000000001','administrator'),
 ('16000000-0000-0000-0000-000000000002','stock'),
 ('16000000-0000-0000-0000-000000000003','management'),
-('16000000-0000-0000-0000-000000000004','salesperson');
+('16000000-0000-0000-0000-000000000004','sales');
 
 select has_view('public','stock_reordering_workspace','shared Stock Reordering view exists');
 select ok(not has_table_privilege('anon','public.stock_reordering_workspace','select'),'signed-out users cannot read Stock Reordering');

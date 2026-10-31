@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { loadMarketingCampaigns, loadRfqList } from '../src/recordLists.ts'
+import { loadMarketingCampaigns } from '../src/recordLists.ts'
 import { loadStockBookingWorkspace, loadStockBookingTransfer } from '../src/stockBookingData.ts'
 
 // Model the API's count, filtering, ordering and row cap, rather than returning
@@ -44,15 +44,6 @@ const records = Array.from({ length: 1205 }, (_, i) => ({
   id: String(i).padStart(5, '0'), received_at: i, updated_at: Math.floor(i / 3),
   created_by: i % 2 ? 'other' : 'me', deleted_at: null,
 }))
-
-test('RFQs include the newest record and every permitted unarchived record beyond 500', async () => {
-  const result = await loadRfqList(database({ sales_desk_rfqs: [...records, { ...records[0], id: 'deleted', deleted_at: 'yesterday' }] }))
-  assert.equal(result.count, 1205)
-  assert.equal(result.data.length, 1205)
-  assert.equal(result.data[0].id, '01204')
-  assert.equal(result.data.at(-1).id, '00000')
-  assert.equal(new Set(result.data.map(row => row.id)).size, 1205)
-})
 
 test('Marketing loads all campaign options and preserves tied sort values', async () => {
   const db = database({ posts: records, campaigns: records })

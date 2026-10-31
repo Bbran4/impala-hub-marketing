@@ -1,3 +1,5 @@
+import RecordPagination from './RecordPagination'
+import { useRecordPage, useDebouncedSearch } from './useRecordPage'
 import { storageFileType } from './storageUploadRules'
 import { createRfqService, type RfqService, type Rfq, type RfqCreate, type RfqValues, type RfqConfig, type SalesDeskUser, type RfqDashboard, type RfqAnalytics, type RfqAudit, type RfqAttachment, type SalesCode, type ConfigOption, type ConfigKind, type ConfigPatch } from './rfqService'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -404,7 +406,6 @@ function RfqPanel({ mode, rfqId, config, user, token, service, onClose, onChange
 export default function SalesDesk({ page, embedded = false, token, setNotice, setError, openRfqId, onOpenRfqHandled }: Props) {
   const [user, setUser] = useState<SalesDeskUser | null>(null)
   const [busy, setBusy] = useState(false)
-  const [rfqs, setRfqs] = useState<Rfq[]>([])
   const [config, setConfig] = useState<RfqConfig>({ media_platforms: [], sales_codes: [], statuses: [] })
   const [dashboard, setDashboard] = useState<RfqDashboard>({ unclaimed: 0, claimed: 0, received_today: 0, open: 0 })
   const [analytics, setAnalytics] = useState<RfqAnalytics>({ totals: {}, series: [] })
@@ -432,25 +433,28 @@ export default function SalesDesk({ page, embedded = false, token, setNotice, se
   }, [openRfqId, page, onOpenRfqHandled])
   const service = useMemo(() => createRfqService(), [token])
 
+  const debouncedSearch = useDebouncedSearch(search)
+  const listLoader = useCallback((offset:number) => service.list({search:debouncedSearch,status:statusFilter,code:codeFilter,type:typeFilter,sort},offset),[service,debouncedSearch,statusFilter,codeFilter,typeFilter,sort])
+  const rfqPage = useRecordPage<Rfq, Awaited<ReturnType<typeof service.list>>>(listLoader,50,page==='RFQs'&&view==='rfqs',setError)
+  const rfqs = rfqPage.items
   const load = useCallback(async () => {
     if (!token) return
     try {
-      const [me, cfg, list, dash, analyticsResult, sharedMilestones] = await Promise.all([
+      const [me, cfg, dash, analyticsResult, sharedMilestones] = await Promise.all([
         embedded ? service.settingsIdentity() : service.me(), embedded ? service.settingsConfiguration() : service.configuration(),
-        page === 'RFQs' && view === 'rfqs' ? service.list() : Promise.resolve({ items: [] }),
         page === 'RFQs' && view === 'dashboard' ? service.dashboard() : Promise.resolve<RfqDashboard>({ unclaimed: 0, claimed: 0, received_today: 0, open: 0 }),
         page === 'RFQs' && view === 'analytics' ? service.analytics({ period: analyticsPeriod, month: analyticsMonth, week: analyticsWeek, year: analyticsYear }) : Promise.resolve({ totals: {}, series: [] }),
         page === 'RFQs' && view === 'dashboard' ? loadSalesMilestones() : Promise.resolve(null),
       ])
-      setUser(me); setConfig(cfg); setRfqs(list.items || []); setDashboard(dash); setAnalytics(analyticsResult); if (sharedMilestones) setMilestoneSettings(sharedMilestones)
+      setUser(me); setConfig(cfg); setDashboard(dash); setAnalytics(analyticsResult); if (sharedMilestones) setMilestoneSettings(sharedMilestones)
     } catch (e) { setError((e as Error).message) }
   }, [token, service, setError, analyticsPeriod, analyticsMonth, analyticsWeek, analyticsYear, page, view, embedded])
   useEffect(() => { void load() }, [load, page])
 
   async function act(work: () => Promise<unknown>, success?: string) {
     setBusy(true); setError('')
-    try { await work(); if (success) setNotice(success); await load() }
-    catch (e) { setError((e as Error).message); await load() }
+    try { await work(); if (success) setNotice(success); await load(); rfqPage.refresh() }
+    catch (e) { setError((e as Error).message); await load(); rfqPage.refresh() }
     finally { setBusy(false) }
   }
 
@@ -483,16 +487,7 @@ export default function SalesDesk({ page, embedded = false, token, setNotice, se
 
   const isStaff = user?.role === 'administrator' || user?.role === 'manager'
   const isAdmin = user?.role === 'administrator'
-  const rows = rfqs.filter((r) =>
-    (!statusFilter || r.status_id === statusFilter) && (!codeFilter || r.sales_code_id === codeFilter) &&
-    (!typeFilter || r.rfq_type === typeFilter) &&
-    (!search || `${r.rfq_no} ${r.original_rfq_no || ''} ${r.customer_name} ${r.document_number}`.toLowerCase().includes(search.toLowerCase())),
-  ).sort((a, b) => {
-    if (sort === 'customer') return String(a.customer_name).localeCompare(String(b.customer_name))
-    if (sort === 'rfq_no') return String(b.rfq_no).localeCompare(String(a.rfq_no))
-    if (sort === 'received_desc') return String(b.received_at).localeCompare(String(a.received_at))
-    return (Number(!!a.sales_code) - Number(!!b.sales_code)) || String(a.received_at).localeCompare(String(b.received_at))
-  })
+  const rows = rfqs
   const gpMilestones = (milestoneSettings?.sales || []).map((item) => item.value)
   const gpPercentMilestones = (milestoneSettings?.gp || []).map((item) => item.value)
   const milestoneColors = Object.fromEntries((milestoneSettings?.sales || []).map((item) => [String(item.value), item.color]))
@@ -562,6 +557,7 @@ export default function SalesDesk({ page, embedded = false, token, setNotice, se
                 <label>Sort by<select value={sort} onChange={(e) => setSort(e.target.value)}><option value="received_asc">Oldest received</option><option value="received_desc">Newest received</option><option value="customer">Customer name</option><option value="rfq_no">RFQ number</option></select></label>
                 
               </div>
+              <RecordPagination page={rfqPage.page} size={50} total={rfqPage.total} loading={rfqPage.loading} onPage={rfqPage.setPage} />
               <div className="rfq-table-wrap"><table className="rfq-table">
                 <thead><tr><th>RFQ No.</th><th>Type</th><th>Received</th><th>Customer</th><th>Media platform</th><th>Sales code</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>{rows.length ? rows.map((r) => (
@@ -648,7 +644,7 @@ export default function SalesDesk({ page, embedded = false, token, setNotice, se
       {panel && token && (
         <RfqPanel
           key={`${panel.mode}-${panel.id || 'new'}`} mode={panel.mode} rfqId={panel.id} config={config} user={user || { id: '', display_name: '', sales_code: null, role: 'salesperson' }}
-          token={token} service={service} onClose={closePanel} onChanged={load} setNotice={setNotice} setError={setError}
+          token={token} service={service} onClose={closePanel} onChanged={async () => { await load(); rfqPage.refresh() }} setNotice={setNotice} setError={setError}
         />
       )}
     </section>
