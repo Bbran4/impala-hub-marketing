@@ -1,3 +1,4 @@
+import { storageFileType } from "../storageUploadRules";
 import { useEffect, useState } from "react";
 import type { MarketingPermission } from "../marketingPermissions";
 import { clearRfqSession } from "../rfqService";
@@ -137,10 +138,11 @@ export function useAccount(
     setProfileBusy(true);
     setError("");
     try {
+      const contentType = storageFileType("profile-avatars", file);
       const path = `${user.id}/avatar-${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("profile-avatars")
-        .upload(path, file, { upsert: false, contentType: file.type });
+        .upload(path, file, { upsert: false, contentType });
       if (uploadError) throw new Error(uploadError.message);
       const { data } = supabase.storage
         .from("profile-avatars")

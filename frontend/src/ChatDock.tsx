@@ -1,3 +1,4 @@
+import { storageFileAccept, storageFileType } from './storageUploadRules'
 import { startVisiblePolling } from './visiblePolling'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, CheckCheck, ChevronDown, FileText, MessageCircle, Minus, Paperclip, Search, Send, X } from 'lucide-react'
@@ -260,16 +261,19 @@ function ChatWindow({ nameColors, conversation, minimized, onMinimize, onClose, 
     if (!supabase || (!draft.trim() && !files.length) || sending || !currentUserId) return
     setSending(true)
     const pendingFiles = files
+    try { pendingFiles.forEach((file) => storageFileType('chat-attachments', file)) }
+    catch (error) { onError((error as Error).message); setSending(false); return }
     const body = draft.trim() || `Attachments: ${pendingFiles.map((file) => file.name).join(', ')}`
     pendingMessageId.current ||= crypto.randomUUID()
     const { data: messageId, error } = await supabase.rpc('chat_send_message', { target_conversation_id: conversation.conversation_id, p_client_message_id: pendingMessageId.current, message_body: body })
     if (error) onError(`Could not send message: ${error.message}`)
     else {
       for (const file of pendingFiles) {
+        const contentType = storageFileType('chat-attachments', file)
         const path = `${currentUserId}/${messageId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-        const upload = await supabase.storage.from('chat-attachments').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+        const upload = await supabase.storage.from('chat-attachments').upload(path, file, { contentType, upsert: false })
         if (upload.error) { onError(`Could not upload ${file.name}: ${upload.error.message}`); continue }
-        const saved = await supabase.rpc('chat_add_attachment', { p_direct_message_id: messageId, p_channel_message_id: null, p_storage_path: path, p_file_name: file.name, p_content_type: file.type, p_size_bytes: file.size })
+        const saved = await supabase.rpc('chat_add_attachment', { p_direct_message_id: messageId, p_channel_message_id: null, p_storage_path: path, p_file_name: file.name, p_content_type: contentType, p_size_bytes: file.size })
         if (saved.error) onError(`Could not save ${file.name}: ${saved.error.message}`)
       }
       pendingMessageId.current = null; setDraft(''); setFiles([]); await loadMessages(); onChanged()
@@ -279,7 +283,9 @@ function ChatWindow({ nameColors, conversation, minimized, onMinimize, onClose, 
 
   function chooseFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || [])
-    if (selected.some((file) => file.size > 25 * 1024 * 1024)) { onError('Chat attachments must be 25 MB or smaller.'); return }
+    event.target.value = ''
+    try { selected.forEach((file) => storageFileType('chat-attachments', file)) }
+    catch (error) { onError((error as Error).message); return }
     if (files.length + selected.length > 5) { onError('A chat message can contain no more than 5 attachments.'); return }
     setFiles((current) => [...current, ...selected])
     event.target.value = ''
@@ -301,7 +307,7 @@ function ChatWindow({ nameColors, conversation, minimized, onMinimize, onClose, 
         }) : <div className="chat-empty"><MessageCircle size={24} /><span>This is the start of your chat with {personName(conversation)}.</span></div>}
         <div ref={bottomRef} />
       </div>
-      <footer><div className="chat-compose"><label className="icon-button" aria-label="Attach files" title="Attach files"><Paperclip size={17} /><input type="file" multiple onChange={chooseFiles} /></label>{files.length > 0 && <div className="chat-file-chips">{files.map((file, index) => <button key={`${file.name}-${index}`} onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}>{file.name} ×</button>)}</div>}<textarea rows={1} maxLength={4000} value={draft} onChange={(event) => { pendingMessageId.current = null; setDraft(event.target.value) }} placeholder={`Message ${personName(conversation)}…`} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} /><button className="icon-button" disabled={(!draft.trim() && !files.length) || sending} aria-label="Send message" onClick={() => void send()}><Send size={17} /></button></div></footer>
+      <footer><div className="chat-compose"><label className="icon-button" aria-label="Attach files" title="Attach files"><Paperclip size={17} /><input type="file" accept={storageFileAccept('chat-attachments')} multiple onChange={chooseFiles} /></label>{files.length > 0 && <div className="chat-file-chips">{files.map((file, index) => <button key={`${file.name}-${index}`} onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}>{file.name} ×</button>)}</div>}<textarea rows={1} maxLength={4000} value={draft} onChange={(event) => { pendingMessageId.current = null; setDraft(event.target.value) }} placeholder={`Message ${personName(conversation)}…`} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} /><button className="icon-button" disabled={(!draft.trim() && !files.length) || sending} aria-label="Send message" onClick={() => void send()}><Send size={17} /></button></div></footer>
     </>}
   </section>
 }

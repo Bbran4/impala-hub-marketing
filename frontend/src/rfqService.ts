@@ -1,3 +1,4 @@
+import { storageFileType } from "./storageUploadRules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeMarketingFilename } from "./marketingPosts.ts";
 import { loadAllRows } from "./pagedRows.ts";
@@ -143,10 +144,14 @@ export function createRfqService(client: SupabaseClient | null = supabase) {
       return { items, total: rows.count, limit: items.length, offset: 0 };
     },
     async settingsIdentity(): Promise<SalesDeskUser> {
-      return resultData<SalesDeskUser>(await requireSupabase(client).rpc("admin_settings_identity"));
+      return resultData<SalesDeskUser>(
+        await requireSupabase(client).rpc("admin_settings_identity"),
+      );
     },
     async settingsConfiguration(): Promise<RfqConfig> {
-      return resultData<RfqConfig>(await requireSupabase(client).rpc("admin_sales_desk_configuration"));
+      return resultData<RfqConfig>(
+        await requireSupabase(client).rpc("admin_sales_desk_configuration"),
+      );
     },
     async configuration(): Promise<RfqConfig> {
       const dbClient = requireSupabase(client);
@@ -276,15 +281,14 @@ export function createRfqService(client: SupabaseClient | null = supabase) {
       const { data } = await dbClient.auth.getSession();
       if (!data.session?.user)
         throw new AuthError("Sign in again to attach files.");
-      if (file.size > 15 * 1024 * 1024)
-        throw new Error("Maximum attachment size is 15 MB.");
+      const contentType = storageFileType("sales-desk-attachments", file);
       const userId = data.session.user.id;
       const path = `${userId}/${id}/${crypto.randomUUID()}-${safeMarketingFilename(file.name)}`;
       checkError(
         await dbClient.storage
           .from("sales-desk-attachments")
           .upload(path, file, {
-            contentType: file.type || "application/octet-stream",
+            contentType,
             upsert: false,
           }),
       );
@@ -294,7 +298,7 @@ export function createRfqService(client: SupabaseClient | null = supabase) {
           rfq_id: id,
           original_name: file.name,
           storage_path: path,
-          content_type: file.type || "application/octet-stream",
+          content_type: contentType,
           size: file.size,
           uploaded_by: userId,
         })

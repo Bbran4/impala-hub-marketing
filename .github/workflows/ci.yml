@@ -34,6 +34,8 @@ jobs:
           version: 2.122.0
       - run: supabase start
       - run: python scripts/test_sales_desk_concurrency.py
+      - name: Verify Storage size and MIME enforcement over HTTP
+        run: python scripts/test_storage_upload_limits.py
       - run: supabase test db
       - if: always()
         run: supabase stop --no-backup

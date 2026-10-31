@@ -1,3 +1,4 @@
+import { storageFileType } from './storageUploadRules'
 import { createRfqService, type RfqService, type Rfq, type RfqCreate, type RfqValues, type RfqConfig, type SalesDeskUser, type RfqDashboard, type RfqAnalytics, type RfqAudit, type RfqAttachment, type SalesCode, type ConfigOption, type ConfigKind, type ConfigPatch } from './rfqService'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarChart3, ClipboardList, Download, Eye, GripVertical, Megaphone, Paperclip, Plus, Settings, Tags, Trash2, Users, X } from 'lucide-react'
@@ -181,9 +182,7 @@ function RfqPanel({ mode, rfqId, config, user, token, service, onClose, onChange
   async function uploadAll(id: string, list: File[]) {
     let latest: Rfq | null = null; const failed: string[] = []
     for (const file of list) {
-      if (file.size > 15 * 1024 * 1024) { failed.push(`${file.name}: maximum file size is 15 MB`); continue }
-      if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(file.type)) { failed.push(`${file.name}: unsupported file type`); continue }
-      try { latest = await service.uploadAttachment(id, file) }
+      try { storageFileType('sales-desk-attachments', file); latest = await service.uploadAttachment(id, file) }
       catch (e) { failed.push(`${file.name}: ${(e as Error).message}`) }
     }
     return { latest, failed }
