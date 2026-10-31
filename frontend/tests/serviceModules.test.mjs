@@ -365,6 +365,20 @@ test("missing Supabase configuration fails before any network request", async ()
   }
 });
 
+test("post media is validated before upload or save, while multi-photo drafts remain supported", async () => {
+  let calls=0;
+  const service=createPostsService({
+    rpc(){calls++;return {single(){return success({id:'multi'})}}},
+    auth:{getSession(){calls++;throw new Error('must not run')}},
+  });
+  await assert.rejects(service.upload(new File(['pdf'],'bad.pdf',{type:'application/pdf'})),/JPG/);
+  await assert.rejects(service.create({media:[{url:'http://insecure/image'}]}),/HTTPS/);
+  await assert.rejects(service.update('post',{media:Array(11).fill({url:'https://storage/image'})}),/10 images/);
+  assert.equal(calls,0);
+  assert.equal((await service.create({media:[{url:'https://storage/one.jpg'},{url:'https://storage/two.jpg'}]})).id,'multi');
+  assert.equal(calls,1);
+});
+
 test("service contracts reject server-owned fields and malformed filters at compile time", () => {
   const config = ts.readConfigFile(
     path.join(root, "tsconfig.json"),

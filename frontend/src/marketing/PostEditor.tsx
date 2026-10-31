@@ -1,5 +1,6 @@
 import { ImagePlus, Send, Upload, X } from "lucide-react";
 import { mediaSrc } from "../lib";
+import { MAX_POST_IMAGES, POST_IMAGE_TYPES } from "../facebookPostMedia";
 import type { MarketingModel } from "./useMarketingWorkspace";
 const pad = (n: number) => String(n).padStart(2, "0");
 const toLocalInput = (value?: string | null) => {
@@ -11,6 +12,7 @@ export default function PostEditor({ model }: { model: MarketingModel }) {
   const {
     campaigns,
     editor,
+    editorError,
     busy,
     setEditor,
     patchEditor,
@@ -51,6 +53,11 @@ export default function PostEditor({ model }: { model: MarketingModel }) {
               </button>
             </header>
             <div className="editor-body">
+              {editorError && (
+                <p className="error" role="alert">
+                  {editorError}
+                </p>
+              )}
               <label id="lbl-channels">
                 Channels <span>Choose where this post should appear</span>
               </label>
@@ -102,16 +109,19 @@ export default function PostEditor({ model }: { model: MarketingModel }) {
                 <label id="lbl-images">
                   Images{" "}
                   <span>
-                    JPG, PNG, WEBP or GIF, max 15 MB each. Instagram needs at
-                    least one.
+                    Up to {MAX_POST_IMAGES} images, max 15 MB each. JPG, PNG,
+                    WEBP or GIF. Images publish together in one Facebook post.
                   </span>
                 </label>
                 <label className="upload-button">
                   <Upload size={16} /> Add images
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    accept={POST_IMAGE_TYPES.join(",")}
                     multiple
+                    disabled={
+                      busy || (editor.media || []).length >= MAX_POST_IMAGES
+                    }
                     onChange={(e) => void upload(e.target)}
                   />
                 </label>
@@ -122,6 +132,7 @@ export default function PostEditor({ model }: { model: MarketingModel }) {
                     <img src={mediaSrc(m)} alt={m.name} />
                     <button
                       aria-label={`Remove ${m.name}`}
+                      disabled={busy}
                       onClick={() =>
                         patchEditor({
                           media: (editor.media || []).filter((_, j) => i !== j),

@@ -7,6 +7,9 @@
     "api/marketing/facebook/publish-due.ts": {
       "maxDuration": 300
     },
+    "api/marketing/facebook/publish.ts": {
+      "maxDuration": 300
+    },
     "api/marketing/facebook/sync.ts": {
       "maxDuration": 300
     },

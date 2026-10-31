@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { campaignsService } from "../campaignsService";
+import { validateImageCount, validateImageFile } from "../facebookPostMedia";
 import { integrationsService } from "../integrationsService";
 import {
   EDITABLE,
@@ -75,6 +76,9 @@ export function useMarketingWorkspace({
   const [campaignFilter, setCampaignFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<Partial<Post> | null>(null);
+  const [editorError, setEditorError] = useState("");
+  const editorOpen = editor !== null;
+  useEffect(() => setEditorError(""), [editorOpen]);
   const [campaignModal, setCampaignModal] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(
     null,
@@ -317,9 +321,11 @@ export function useMarketingWorkspace({
 
   async function savePost(mode: "draft" | "schedule" | "publish-now") {
     if (!editor) return;
+    setEditorError("");
     const permission =
       `${page === "Feed" ? "feed" : "posts"}.${editor.id ? "edit" : "create"}` as MarketingPermission;
     if (!canMarketing(permission)) {
+      setEditorError("You do not have permission to save this post.");
       setError("You do not have permission to save this post.");
       return;
     }
@@ -348,6 +354,11 @@ export function useMarketingWorkspace({
       let saved: Post;
       if (editor.id) saved = await postsService.update(editor.id, payload);
       else saved = await postsService.create(payload);
+      // A later publishing/network failure must retry this saved record, not
+      // create a second draft and bypass the original publishing claim.
+      setEditor((current) =>
+        current ? { ...current, id: saved.id } : current,
+      );
       const facebookLive = integrations.some(
         (i) => i.provider === "facebook" && i.status === "connected",
       );
@@ -370,6 +381,9 @@ export function useMarketingWorkspace({
       setEditor(null);
       await load();
     } catch (e) {
+      setEditorError(
+        e instanceof Error ? e.message : "The post could not be saved.",
+      );
       handleError(e);
     } finally {
       setBusy(false);
@@ -382,8 +396,11 @@ export function useMarketingWorkspace({
     if (!files.length) return;
     setBusy(true);
     setError("");
+    setEditorError("");
     try {
       const uploaded: Media[] = [];
+      validateImageCount((editor?.media?.length || 0) + files.length);
+      files.forEach(validateImageFile);
       for (const file of files) {
         uploaded.push(await postsService.upload(file));
       }
@@ -392,6 +409,9 @@ export function useMarketingWorkspace({
         e ? { ...e, media: [...(e.media || []), ...uploaded] } : e,
       );
     } catch (e) {
+      setEditorError(
+        e instanceof Error ? e.message : "The images could not be uploaded.",
+      );
       handleError(e);
     } finally {
       setBusy(false);
@@ -603,6 +623,7 @@ export function useMarketingWorkspace({
     campaignFilter,
     search,
     editor,
+    editorError,
     campaignModal,
     editingCampaignId,
     campaignName,

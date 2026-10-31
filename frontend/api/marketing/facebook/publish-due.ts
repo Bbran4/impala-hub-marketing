@@ -2,7 +2,7 @@ import { withApiErrors, requireMethod } from "../../_lib/http.ts";
 import { requireCron } from "../../_lib/auth.ts";
 import { serverSettings, requireSettings } from "../../_lib/config.ts";
 import { createAdminClient } from "../../_lib/supabase.ts";
-import { claimPost, publishClaimed } from "./_publishing.js";
+import { claimPost, publishClaimed, publishingBudget } from "./_publishing.js";
 export default withApiErrors(async (req, res) => {
   requireMethod(req, ["GET", "POST"]);
   requireCron(req);
@@ -32,7 +32,7 @@ export default withApiErrors(async (req, res) => {
     if (recovered.error) throw recovered.error;
     const { data: due, error } = await admin
       .from("posts")
-      .select("id")
+      .select("id,media")
       .eq("status", "scheduled")
       .lte("publish_at", now)
       .order("publish_at")
@@ -49,7 +49,7 @@ export default withApiErrors(async (req, res) => {
     const results = [];
     for (const candidate of due || []) {
       // Leave time to finish and persist the in-flight publication.
-      if (Date.now() >= deadline) break;
+      if (Date.now() + publishingBudget(candidate.media) > deadline) break;
       const post = await claimPost(
         admin,
         candidate.id,
@@ -59,16 +59,20 @@ export default withApiErrors(async (req, res) => {
       );
       if (post)
         results.push(
-          await publishClaimed(admin, post, connection.data, encryptionKey),
+          await publishClaimed(
+            admin,
+            post,
+            connection.data,
+            encryptionKey,
+            deadline,
+          ),
         );
     }
     return res.status(200).json({ processed: results.length, results });
   } catch {
-    return res
-      .status(500)
-      .json({
-        detail:
-          "Scheduled publication could not be completed. Check post statuses before retrying.",
-      });
+    return res.status(500).json({
+      detail:
+        "Scheduled publication could not be completed. Check post statuses before retrying.",
+    });
   }
 });

@@ -24,6 +24,7 @@ const bundled = await build({
     export { RolePermissionControl } from './src/ApplicationPermissions.tsx'
     export { default as PostBoard } from './src/PostBoard.tsx'
     export { default as PostDetail } from './src/PostDetail.tsx'
+    export { default as PostEditor } from './src/marketing/PostEditor.tsx'
     export { default as ColorPicker } from './src/ColorPicker.tsx'
     export { default as AccountPage } from './src/platform/AccountPage.tsx'
     export { default as SignInPage } from './src/platform/SignInPage.tsx'
@@ -64,6 +65,7 @@ const bundled = await build({
     },
   ],
 });
+
 const bundleFile = path.join(
   tmpdir(),
   `impala-workspace-test-${randomUUID()}.mjs`,
@@ -344,4 +346,13 @@ test("publishing risks are visible on the Board and cannot be dragged, edited or
   assert.match(detail,/Facebook may already have accepted/);assert.match(detail,/Review in App Settings/);
   assert.doesNotMatch(detail,/Delete post|Edit post|This post is scheduled/);
   assert.doesNotMatch(render(ui.PostDetail,{...props,canReconcile:false}),/Review in App Settings/);
+});
+
+test("post editor explains multi-photo limits and shows upload errors inside the dialog", () => {
+  const model={editor:{media:Array.from({length:10},(_,i)=>({id:String(i),url:`https://storage/${i}.jpg`,name:`Image ${i}`}))},editorError:'Choose JPG, PNG, WEBP or GIF images.',busy:false,campaigns:[],channels:['facebook'],integrations:[],canMarketing:()=>true,page:'Posts'};
+  const html=render(ui.PostEditor,{model});
+  assert.match(html,/Up to 10 images/);
+  assert.match(html,/one Facebook post/);
+  assert.match(html,/<input[^>]*type="file"[^>]*multiple[^>]*disabled/);
+  assert.match(html,/role="alert"[^>]*>Choose JPG/);
 });

@@ -22,3 +22,5 @@ New local server imports use explicit `.ts` paths; the project's TypeScript conf
 Marketing scheduled publishing is invoked by the Supabase two-minute timer installed in migration `0113`, using a Vault-backed `CRON_SECRET`. See `FACEBOOK_SETUP.md` for configuration and verification. Both publishing and sync have a 300-second Vercel limit.
 
 The reconciliation endpoint only reads Facebook to verify an outcome; it never publishes. Its server-only database transaction checks the attempt/version, records the administrator review, and clears the related unread alerts.
+
+Manual and scheduled publishers share the multi-photo flow in `_publishing.ts`: stage unpublished photos, then dispatch one feed post. `src/facebookPostMedia.ts` shares attachment validation with the editor. The scheduler budgets all photo requests before claiming work; manual publishing also has a 300-second limit.

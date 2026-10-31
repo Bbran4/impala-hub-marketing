@@ -19,14 +19,14 @@ The UI also needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Priva
 ## Connect and verify
 
 1. Give the employee the Marketing account-management permission.
-2. Open App Settings → Marketing, or Marketing Accounts when permitted.
+2. Open App Settings â†’ Marketing, or Marketing Accounts when permitted.
 3. Select Connect Facebook, complete Meta authorization and choose the Page.
 4. Check the connection and refresh posts. Confirm the Page identity, post previews, metrics availability and last successful update time.
 5. Publish a controlled test post only when authorized. Verify the confirmed result and provider link before relying on scheduling.
 
 ## Scheduled publishing
 
-Migration `0113_marketing_publish_scheduler.sql` installs the Supabase `marketing-publish-due` job every two minutes using `pg_cron` and `pg_net`. The daily Vercel cron entry is removed. `frontend/vercel.json` gives both `publish-due` and `sync` 300 seconds; publishing stops taking new work after four minutes. Atomic per-post claims make overlapping runs safe.
+Migration `0113_marketing_publish_scheduler.sql` installs the Supabase `marketing-publish-due` job every two minutes using `pg_cron` and `pg_net`. The daily Vercel cron entry is removed. `frontend/vercel.json` gives `publish`, `publish-due` and `sync` 300 seconds; the scheduler reserves enough time for each complete post within a four-minute work window. Atomic per-post claims make overlapping runs safe.
 
 The job reads `marketing_publish_cron_secret` from Supabase Vault, falling back to the existing Reporting secret `report_emails_cron_secret`. It must match Vercel's `CRON_SECRET`. If Reporting scheduling already configured that secret, no duplicate credential is needed. Otherwise, set it once in the Supabase SQL editor (never commit the value):
 
@@ -38,9 +38,15 @@ The default origin is `https://impala-hub-marketing.vercel.app`. If the producti
 
 Verify the timer from an authenticated administrator session with `supabase.rpc('marketing_publish_scheduler_status')`, or inspect `cron.job` in the SQL editor for the `marketing-publish-due` job. `configured` and `active` must both be true. The migration cannot invent a Vercel secret: a missing Vault token leaves the job unconfigured instead of sending unauthenticated requests. Check Supabase Cron run history and `net._http_response` for failures; HTTP request IDs are returned by the dispatcher.
 
+## Multiple images
+
+Attach up to ten images to a post (JPG, PNG, WEBP or GIF, up to 15 MB each). The editor checks the whole selection before uploading and reports errors inside the dialog. Save, Publish now and Schedule support multiple images.
+
+Images are prepared as unpublished Facebook photos and attached to one feed post in the same order as the editor. A failed image preparation creates no public post; an uncertain final publication goes to Publishing review. Instagram publishing remains deferred.
+
 ## Review an uncertain publication
 
-The Board includes **Publishing** and **Needs review** columns, and the list can filter either state. Active administrator accounts receive a System notification when publication becomes uncertain. The notification opens **App Settings → Marketing → Publishing review**, including for administrators in normal user view.
+The Board includes **Publishing** and **Needs review** columns, and the list can filter either state. Active administrator accounts receive a System notification when publication becomes uncertain. The notification opens **App Settings â†’ Marketing â†’ Publishing review**, including for administrators in normal user view.
 
 The review queue includes every unresolved attempt, regardless of the current post page or month. Use **Find matching Facebook posts**, inspect the candidate on the connected Page, and select **Verify and mark published**. The server checks Page ownership, caption and attempt time before saving the canonical receipt.
 

@@ -2,12 +2,13 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
+import { publishingBudget } from '../api/marketing/facebook/_publishing.ts';
 
 // Execute the actual HTTP handlers with isolated database/publisher adapters.
 // Shared authentication and the real atomic publisher have separate tests.
 const bundled = await build({
   stdin: {
-    contents: `export {default as publish} from './api/marketing/facebook/publish.ts'; export {default as pages} from './api/marketing/facebook/pages.ts'`,
+    contents: `export {default as publish} from './api/marketing/facebook/publish.ts'; export {default as pages} from './api/marketing/facebook/pages.ts'; export {default as due} from './api/marketing/facebook/publish-due.ts'`,
     resolveDir: fileURLToPath(new URL('../', import.meta.url)), loader: 'ts',
   },
   bundle: true, write: false, platform: 'node', format: 'esm', target: 'es2022',
@@ -16,9 +17,13 @@ const bundled = await build({
     setup(builder) {
       builder.onResolve({ filter: /_lib\/auth\.ts$/ }, () => ({ path: 'auth', namespace: 'adapter' }));
       builder.onResolve({ filter: /_publishing\.js$/ }, () => ({ path: 'publisher', namespace: 'adapter' }));
+      builder.onResolve({ filter: /_lib\/config\.ts$/ }, () => ({ path: 'config', namespace: 'adapter' }));
+      builder.onResolve({ filter: /_lib\/supabase\.ts$/ }, () => ({ path: 'supabase', namespace: 'adapter' }));
       builder.onLoad({ filter: /.*/, namespace: 'adapter' }, ({ path }) => ({ contents: path === 'auth'
-        ? `export async function requireMarketingSession(req,access){globalThis.__impalaApiFixture.access.push(access);return globalThis.__impalaApiFixture.context}`
-        : `export async function claimPost(...args){return globalThis.__impalaApiFixture.claim(...args)};export async function publishClaimed(...args){return globalThis.__impalaApiFixture.publish(...args)}`,
+        ? `export async function requireMarketingSession(req,access){globalThis.__impalaApiFixture.access.push(access);return globalThis.__impalaApiFixture.context}; export function requireCron(){}`
+        : path === 'config' ? `export function serverSettings(){return {encryptionKey:'key'}}; export function requireSettings(){}`
+        : path === 'supabase' ? `export function createAdminClient(){return globalThis.__impalaApiFixture.context.admin}`
+        : `export async function claimPost(...args){return globalThis.__impalaApiFixture.claim(...args)};export async function publishClaimed(...args){return globalThis.__impalaApiFixture.publish(...args)};export function publishingBudget(media){return globalThis.__impalaApiFixture.budget(media)}`,
       }));
     },
   }],
@@ -99,4 +104,27 @@ test('Pages HTTP handler limits choices to the caller, checks expiry and removes
   assert.ok(f.queries.some((q) => q[1] === 'gt' && q[2] === 'expires_at'));
   f.rows.oauth_page_choices.expires_at = '2000-01-01T00:00:00.000Z';
   assert.deepEqual((await invoke(handlers.pages, 'GET')).body.pages, []);
+});
+
+test('scheduled multi-photo batches leave the next post unclaimed when its full upload budget will not fit',async()=>{
+  const originalNow=Date.now;let now=100_000;
+  Date.now=()=>now;
+  const f=fixture();f.budget=publishingBudget;
+  const media=Array.from({length:10},(_,i)=>({url:`https://storage/${i}.jpg`}));
+  f.context.admin={from(table){
+    let writing=false;
+    const q={
+      update(){writing=true;return q},select(value){if(table==='posts'&&!writing)assert.equal(value,'id,media');return q},
+      eq(){return q},lt(){return q},lte(){return q},order(){return q},limit(){return q},
+      async maybeSingle(){return {data:f.rows.provider_connections}},
+      then(resolve,reject){return Promise.resolve(writing?{error:null}:{data:[{id:'first',media},{id:'second',media}]}).then(resolve,reject)},
+    };return q;
+  }};
+  f.publish=async(...args)=>{f.publishes.push(args);now+=220_000;return {status:'published'}};
+  try{
+    const result=await invoke(handlers.due);
+    assert.equal(result.status,200);assert.equal(result.body.processed,1);
+    assert.equal(f.claims.length,1);assert.equal(f.claims[0][1],'first');
+    assert.equal(f.publishes[0][4],340_000);
+  }finally{Date.now=originalNow;}
 });

@@ -13,6 +13,7 @@ import type {
 } from "./marketingTypes";
 import { checkError, marketingRequest, resultData } from "./serviceTransport";
 import { requireSupabase, supabase } from "./supabase";
+import { facebookPostMedia, validateImageFile } from "./facebookPostMedia";
 export type PostValues = Pick<
   Post,
   | "title"
@@ -41,6 +42,7 @@ export function createPostsService(client: SupabaseClient | null = supabase) {
       );
     },
     async create(values: PostValues): Promise<Post> {
+      facebookPostMedia(values.media);
       const dbClient = requireSupabase(client);
       return resultData(
         await dbClient
@@ -49,6 +51,7 @@ export function createPostsService(client: SupabaseClient | null = supabase) {
       );
     },
     async update(id: string, values: PostPatch): Promise<Post> {
+      if (values.media !== undefined) facebookPostMedia(values.media);
       const dbClient = requireSupabase(client);
       return resultData(
         await dbClient
@@ -84,6 +87,7 @@ export function createPostsService(client: SupabaseClient | null = supabase) {
       );
     },
     async upload(file: File): Promise<Media> {
+      validateImageFile(file);
       const dbClient = requireSupabase(client);
       const { data, error } = await dbClient.auth.getSession();
       if (error || !data.session?.user)
