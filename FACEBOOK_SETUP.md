@@ -38,7 +38,15 @@ The default origin is `https://impala-hub-marketing.vercel.app`. If the producti
 
 Verify the timer from an authenticated administrator session with `supabase.rpc('marketing_publish_scheduler_status')`, or inspect `cron.job` in the SQL editor for the `marketing-publish-due` job. `configured` and `active` must both be true. The migration cannot invent a Vercel secret: a missing Vault token leaves the job unconfigured instead of sending unauthenticated requests. Check Supabase Cron run history and `net._http_response` for failures; HTTP request IDs are returned by the dispatcher.
 
-Timeouts or interrupted publishing can produce `publish_unknown`, which requires checking Facebook before retrying.
+## Review an uncertain publication
+
+The Board includes **Publishing** and **Needs review** columns, and the list can filter either state. Active administrator accounts receive a System notification when publication becomes uncertain. The notification opens **App Settings → Marketing → Publishing review**, including for administrators in normal user view.
+
+The review queue includes every unresolved attempt, regardless of the current post page or month. Use **Find matching Facebook posts**, inspect the candidate on the connected Page, and select **Verify and mark published**. The server checks Page ownership, caption and attempt time before saving the canonical receipt.
+
+If sync imported the same publication separately, explicitly enable the merge option. Only a matching, untitled imported copy can be merged; the original title and owner remain, metrics are retained, and the full imported snapshot is archived. Conflicting campaign assignments must be aligned in Posts before merging.
+
+If the post is absent, wait at least ten minutes, check the Page, tick the absence confirmation and record a review note before **Return to draft after review**. This action never republishes or reschedules anything. Recent in-flight attempts cannot be interrupted, and unresolved records cannot be deleted. All resolutions are audited and checked against the exact publishing attempt to prevent stale reviews overwriting a later run.
 
 Disconnecting removes the saved connection through the app. Revoke access in Facebook Business Integrations separately when required. Instagram and WhatsApp connectivity remain deferred.
 

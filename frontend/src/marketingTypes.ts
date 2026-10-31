@@ -26,6 +26,7 @@ export type Post = {
   whatsapp_recipient_name?: string | null;
   status: string;
   publish_at?: string | null;
+  publish_started_at?: string | null;
   published_at?: string | null;
   media: Media[];
   media_count?: number;
@@ -50,6 +51,8 @@ export type HistoryEntry = {
   created_at: string;
   details: {
     actor_name?: string;
+    note?: string;
+    resolution?: string;
     status?: string;
     channels?: string[];
     changed?: string[];

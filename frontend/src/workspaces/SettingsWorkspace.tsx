@@ -10,8 +10,10 @@ export default function SettingsWorkspace({
   setError,
   handleError,
   onAccessUpdated,
+  focusPostId,
 }: {
   onAccessUpdated: () => Promise<void>;
+  focusPostId?: string;
   token: string;
   connections: MarketingConnections;
   setNotice: (message: string) => void;
@@ -37,6 +39,7 @@ export default function SettingsWorkspace({
     <>
       {" "}
       <AdminSettings
+        focusPostId={focusPostId}
         onAccessUpdated={onAccessUpdated}
         stockControlConfiguration={
           <StockConfiguration setNotice={setNotice} setError={setError} />

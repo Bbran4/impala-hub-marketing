@@ -18,6 +18,7 @@ const permissions = {
 export type MarketingAccess =
   | "workspace"
   | "connections"
+  | "reconcile"
   | keyof typeof permissions;
 export async function requireMarketingSession<K extends Setting = never>(
   req: ApiRequest,
@@ -52,6 +53,10 @@ export async function requireMarketingSession<K extends Setting = never>(
       throw new HttpError(500, "Could not verify Marketing workspace access.");
     if (check.data !== true)
       throw new HttpError(403, "Marketing access required.");
+  } else if (access === "reconcile") {
+    const check = await auth.rpc("can_manage_app_settings");
+    if (check.error) throw new HttpError(500, "Could not verify administrator access.");
+    if (check.data !== true) throw new HttpError(403, "Administrator access required.");
   } else if (access === "accounts" || access === "connections") {
     const check = await auth.rpc(
       access === "accounts"

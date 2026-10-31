@@ -1,3 +1,4 @@
+import { publishingMessage, isPublishingRisk } from './publishingState'
 import type { PostWriteStatus } from './marketingTypes'
 import { useState } from 'react'
 import { EDITABLE, fmt, headingOf, isFuture, mediaSrc, type Campaign, type Post } from './lib'
@@ -6,10 +7,12 @@ const COLUMNS: [string, string][] = [
   ['draft', 'Draft'],
   ['awaiting_approval', 'Awaiting approval'],
   ['scheduled', 'Scheduled'],
+  ['publishing', 'Publishing'],
+  ['publish_unknown', 'Needs review'],
   ['published', 'Published'],
   ['failed', 'Failed'],
 ]
-// Clients can only move posts into these. Published and failed are set by the future publishing worker.
+// Clients can only move editable posts into these states. Publishing outcomes are server-managed.
 const DROP_TARGETS = ['draft', 'awaiting_approval', 'scheduled']
 const LABELS = Object.fromEntries(COLUMNS)
 
@@ -65,6 +68,7 @@ export default function PostBoard({ posts, campaigns, onOpen, onMove, onError, c
                     {p.media[0] && <img src={mediaSrc(p.media[0])} alt="" />}
                     <span>{headingOf(p)}</span>
                   </button>
+                  {isPublishingRisk(p.status) && <p className="board-risk-message">{publishingMessage(p.status)}</p>}
                   <small>{p.channels.join(' · ') || 'No channel'}</small>
                   <small>{p.published_at ? `Posted ${fmt(p.published_at)}` : fmt(p.publish_at)}</small>
                   <small>{campaigns.find((c) => c.id === p.campaign_id)?.name || 'No campaign'}</small>

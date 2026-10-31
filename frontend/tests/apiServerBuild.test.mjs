@@ -73,6 +73,7 @@ test("every API handler is type-checked, imports and rejects unsupported methods
         ["facebook/oauth-url", "POST"],
         ["facebook/pages", "GET"],
         ["facebook/select-page", "POST"],
+        ["facebook/reconcile", "POST"],
         ["facebook/publish-due", "POST"],
       ]) {
         const { default: handler } = await import(

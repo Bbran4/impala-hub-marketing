@@ -7,6 +7,7 @@ import {
 import { supabase } from './supabase'
 import ApplicationPermissions from './ApplicationPermissions'
 import ChatSettings from './ChatSettings'
+import MarketingReconciliation from './MarketingReconciliation'
 
 type AppDefinition = {
   id: string
@@ -30,6 +31,7 @@ type AccessRow = {
 type CampaignDropTarget = { type: string; edge: 'before' | 'after' }
 
 type Props = {
+  focusPostId?: string
   onAccessUpdated: () => Promise<void>
   stockControlConfiguration: ReactNode
   salesDeskConfiguration: ReactNode
@@ -175,6 +177,7 @@ export default function AdminSettings(props: Props) {
           </div>
 
           {selectedAppId === 'marketing' && <>
+            <MarketingReconciliation setNotice={props.setNotice} setError={props.setError} focusPostId={props.focusPostId} />
             <section className="admin-settings-panel">
               <div className="section-head"><div><h2>Social media channels</h2><p>Connect, verify and disconnect the accounts used by Marketing.</p></div></div>
               <div className="integration-list">

@@ -22,6 +22,8 @@ const bundled = await build({
     export { default as MarketingDialogs } from './src/marketing/MarketingDialogs.tsx'
     export { default as AppSidebar } from './src/platform/AppSidebar.tsx'
     export { RolePermissionControl } from './src/ApplicationPermissions.tsx'
+    export { default as PostBoard } from './src/PostBoard.tsx'
+    export { default as PostDetail } from './src/PostDetail.tsx'
     export { default as ColorPicker } from './src/ColorPicker.tsx'
     export { default as AccountPage } from './src/platform/AccountPage.tsx'
     export { default as SignInPage } from './src/platform/SignInPage.tsx'
@@ -329,4 +331,17 @@ test("role defaults offer editable allow/deny controls and disable during a save
   assert.match(html, /value="deny"/);
   assert.doesNotMatch(html, /disabled/);
   assert.match(render(ui.RolePermissionControl, { row: { ...row, granted: false }, disabled: true, onChange: no }), /disabled/);
+});
+
+test("publishing risks are visible on the Board and cannot be dragged, edited or deleted", () => {
+  const base = { id:'pending',title:'Uncertain publication',caption:'Caption',status:'publish_unknown',media:[],channels:['facebook'],campaign_id:null };
+  const board = render(ui.PostBoard, { posts:[base,{...base,id:'running',title:'In flight',status:'publishing'}],campaigns:[],canEdit:true,onOpen:no,onMove:no,onError:no });
+  assert.match(board,/Needs review column/);assert.match(board,/Publishing column/);
+  assert.match(board,/Uncertain publication/);assert.match(board,/In flight/);
+  assert.match(board,/data-status="publish_unknown" draggable="false"/);
+  const props = {post:base,campaigns:[],canEdit:true,canDelete:true,canAssignCampaign:false,onBack:no,onEdit:no,onReschedule:no,onDelete:no,onSaveCampaign:async()=>{},onOpenImage:no,onError:no};
+  const detail=render(ui.PostDetail,{...props,canReconcile:true,onReconcile:no});
+  assert.match(detail,/Facebook may already have accepted/);assert.match(detail,/Review in App Settings/);
+  assert.doesNotMatch(detail,/Delete post|Edit post|This post is scheduled/);
+  assert.doesNotMatch(render(ui.PostDetail,{...props,canReconcile:false}),/Review in App Settings/);
 });

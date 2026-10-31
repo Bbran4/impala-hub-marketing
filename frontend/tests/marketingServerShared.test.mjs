@@ -47,6 +47,7 @@ function fixture({
       return {
         data:
           name === "can_access_workspace" ? workspace
+            : name === "can_manage_app_settings" ? settingsManager
             : name === "can_manage_marketing_accounts" ? settingsManager || allowed.includes("feed.manage_accounts")
             : name === "can_view_marketing_connections" ? settingsManager || workspace
             : allowed.includes(permission),
@@ -315,4 +316,12 @@ test("normal-view settings authority allows connection configuration without pub
   const broken = fixture({ settingsManager: true, errorOn: 'can_manage_marketing_accounts' });
   await assert.rejects(requireMarketingSession(request, 'accounts', {}, broken.dependencies), status(500));
   assert.deepEqual(broken.created, ['browser-key']);
+});
+
+test("reconciliation needs a real administrator account, not publishing permissions", async () => {
+  const admin=fixture({workspace:false,settingsManager:true});
+  await requireMarketingSession(request,'reconcile',{},admin.dependencies);
+  const writer=fixture({allowed:['posts.edit','posts.create']});
+  await assert.rejects(requireMarketingSession(request,'reconcile',{},writer.dependencies),status(403));
+  assert.deepEqual(writer.created,['browser-key']);
 });

@@ -85,6 +85,8 @@ export default function MarketingPosts({ model }: { model: MarketingModel }) {
               <option value="draft">Drafts</option>
               <option value="awaiting_approval">Awaiting approval</option>
               <option value="scheduled">Scheduled</option>
+              <option value="publishing">Publishing</option>
+              <option value="publish_unknown">Needs review</option>
               <option value="published">Published</option>
               <option value="failed">Failed</option>
               <option value="engagements">Published / engagements</option>

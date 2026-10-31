@@ -12,7 +12,7 @@
 .history-list small{color:#6b7280;white-space:nowrap}
 .view-toggle{display:flex;gap:4px}
 .view-toggle .active{background:#1f2937;color:#fff}
-.board{display:grid;grid-template-columns:repeat(5,minmax(210px,1fr));gap:14px;overflow-x:auto;align-items:start}
+.board{display:grid;grid-template-columns:repeat(7,minmax(210px,1fr));gap:14px;overflow-x:auto;align-items:start}
 .board-col{background:#f3f5f8;border:2px solid transparent;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:140px}
 .board-col.over{border-color:#e7b94f;background:#fff7e0}
 .board-col header{display:flex;justify-content:space-between;font-size:14px}
@@ -573,3 +573,12 @@ button.app-card{width:100%;cursor:pointer;font:inherit}
 .sd-milestone-save-bar p,.sd-milestone-import p{flex:1;min-width:180px;margin:0;font-size:11px;color:#71808d;line-height:1.6}
 
 .permission-role-hint{font-size:11px;line-height:1.6;color:#71808d;background:#f7f9fb;padding:12px;border:1px solid #e8edf1;border-radius:8px}
+
+.status.publishing{background:#e9efff;color:#4552a0}.status.publish_unknown{background:#fff0df;color:#924c09}
+.board-risk-message{font-size:10px;line-height:1.5;color:#8b551f;margin:7px 0}
+.publishing-warning{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid #e8c78b;border-radius:9px;background:#fff7e8;color:#87500e;margin:14px 0}.publishing-warning>svg{flex:none}.publishing-warning p{font-size:12px;line-height:1.6;margin:4px 0}.publishing-warning b{font-size:12px}
+.marketing-reconciliation>label,.reconcile-published>label,.reconcile-draft>label{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-size:11px;color:#526170}
+.marketing-reconciliation select,.marketing-reconciliation input:not([type=checkbox]):not([type=radio]),.marketing-reconciliation textarea{width:100%;padding:9px 10px;border:1px solid #d8e1e7;border-radius:7px;font:inherit;background:#fff;color:#304456}
+.reconcile-published,.reconcile-draft{border-top:1px solid #e8edf1;margin-top:18px;padding-top:15px}.reconcile-published h3,.reconcile-draft h3{font-size:13px;margin:0 0 7px}.reconcile-published p,.reconcile-draft p{font-size:11px;line-height:1.6;color:#71808d}
+.marketing-reconciliation .reconcile-confirm,.reconcile-matches label{display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-size:11px;line-height:1.5}.reconcile-matches{margin:12px 0;display:grid;gap:10px}.reconcile-matches a{margin-left:10px}.reconcile-caption{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}.reconcile-preview{display:flex;gap:8px;flex-wrap:wrap}.reconcile-preview img{width:65px;height:65px;object-fit:cover;border-radius:6px}
+.cal-chip[data-status=publishing]{border-color:#7a86c5}.cal-chip[data-status=publish_unknown]{border-color:#dc9b35;background:#fff4df}

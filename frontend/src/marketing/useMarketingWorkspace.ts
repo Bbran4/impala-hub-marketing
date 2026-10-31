@@ -33,7 +33,6 @@ const emptyPost = (): Partial<Post> => ({
   publish_at: "",
   media: [],
 });
-const NEEDS_ATTENTION = ["awaiting_approval", "failed"];
 
 export function useMarketingWorkspace({
   enabled,
@@ -43,6 +42,8 @@ export function useMarketingWorkspace({
   permissions,
   canMarketing,
   isAdministrator,
+  canReconcile,
+  onReconcilePost,
   setPage,
   setNotice,
   setError,
@@ -55,6 +56,8 @@ export function useMarketingWorkspace({
   permissions: MarketingPermission[];
   canMarketing: (permission: MarketingPermission) => boolean;
   isAdministrator: boolean;
+  canReconcile: boolean;
+  onReconcilePost: (id: string) => void;
   handleError: (error: unknown) => void;
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -648,6 +651,8 @@ export function useMarketingWorkspace({
     monthPosts,
     canMarketing,
     isAdministrator,
+    canReconcile,
+    onReconcilePost,
     setPage,
     setError,
     handleError,

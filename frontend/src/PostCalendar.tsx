@@ -1,3 +1,4 @@
+import { postStatusLabel } from './publishingState'
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { headingOf, type Post } from './lib'
@@ -93,7 +94,7 @@ export default function PostCalendar({ posts, month, onOpen, onChangeDate, onCre
               {items.slice(0, 3).map((p) => (
                 <button key={p.id} className="cal-chip" data-status={p.status} draggable={canEdit && MOVABLE.includes(p.status)}
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)} onClick={() => onOpen(p.id)}
-                  title={`${headingOf(p)} (${p.status.replace(/_/g, ' ')})`}>
+                  title={`${headingOf(p)} (${postStatusLabel(p.status)})`}>
                   {headingOf(p)}
                 </button>
               ))}

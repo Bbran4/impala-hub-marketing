@@ -32,6 +32,8 @@ export default function MarketingPostDetail({
           onSaveCampaign={saveCampaign}
           onOpenImage={(images, index) => setImageViewer({ images, index })}
           onError={handleError}
+          canReconcile={model.canReconcile}
+          onReconcile={() => model.onReconcilePost(selected.id)}
           canEdit={canMarketing("posts.edit")}
           canDelete={canMarketing("posts.delete")}
           canAssignCampaign={canMarketing("posts.assign_campaign")}

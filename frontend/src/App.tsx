@@ -46,6 +46,10 @@ function HubApp({
   onAccessChanged: () => void;
 }) {
   const [page, setPage] = useState(initialPage);
+  const [reconciliationTarget, setReconciliationTarget] = useState<{
+    id: string;
+    request: number;
+  } | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [notificationRfqId, setNotificationRfqId] = useState<string | null>(
@@ -99,6 +103,8 @@ function HubApp({
     permissions: marketingPermissions,
     canMarketing,
     isAdministrator,
+    canReconcile: isAdministratorAccount,
+    onReconcilePost: openReconciliation,
     setPage,
     setNotice,
     setError,
@@ -134,11 +140,27 @@ function HubApp({
   ]);
   const navigate = (target: string) => {
     marketing.resetFilters();
+    setReconciliationTarget(null);
     setPage(target);
   };
+  function openReconciliation(id: string) {
+    setReconciliationTarget((previous) => ({
+      id,
+      request: (previous?.request || 0) + 1,
+    }));
+    setPage("Admin Settings");
+  }
   function openNotificationTarget(notification: UserNotification) {
     setError("");
     setNotice("");
+    if (
+      notification.kind === "marketing_publish_unknown" &&
+      isAdministratorAccount &&
+      notification.target_record_id
+    ) {
+      openReconciliation(notification.target_record_id);
+      return;
+    }
     if (notification.channel === "sales_desk" && canAccessSalesDesk) {
       setNotificationRfqId(notification.target_record_id);
       setPage("RFQs");
@@ -273,6 +295,8 @@ function HubApp({
             )}
             {allowed && context.isAdminSettingsPage && (
               <SettingsWorkspace
+                key={reconciliationTarget?.request || 0}
+                focusPostId={reconciliationTarget?.id}
                 onAccessUpdated={account.loadProfile}
                 token={key}
                 connections={connections}

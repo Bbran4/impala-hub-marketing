@@ -1,3 +1,4 @@
+import { postStatusLabel, isPublishingRisk } from '../publishingState';
 import {
   ClipboardList,
   Eye,
@@ -218,7 +219,7 @@ export function PostList({
                 >
                   <div className="post-meta">
                     <span className={`status ${p.status}`}>
-                      {p.status.replace(/_/g, " ")}
+                      {postStatusLabel(p.status)}
                     </span>
                     <span>{p.channels.join(" · ") || "No channel"}</span>
                   </div>
@@ -251,7 +252,7 @@ export function PostList({
                       Edit
                     </button>
                   )}
-                  {canDelete && (
+                  {canDelete && !isPublishingRisk(p.status) && (
                     <button
                       className="icon-button"
                       title="Delete local record (only after it is absent from Facebook)"

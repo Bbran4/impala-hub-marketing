@@ -1,3 +1,4 @@
+import { publishingMessage, isPublishingRisk, postStatusLabel } from './publishingState'
 import { postsService } from './postsService'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, CalendarClock, ImagePlus, Lock, Pencil, Trash2, X } from 'lucide-react'
@@ -15,19 +16,22 @@ type Props = {
   onError: (e: unknown) => void
   canEdit: boolean
   canDelete: boolean
+  canReconcile?: boolean
+  onReconcile?: () => void
   canAssignCampaign: boolean
 }
 
-const VERBS: Record<string, string> = { created: 'Created', updated: 'Updated', deleted: 'Deleted' }
+const VERBS: Record<string, string> = { created: 'Created', updated: 'Updated', deleted: 'Deleted', reconciled: 'Reconciled' }
 
 function describeEntry(h: HistoryEntry): string {
   const parts: string[] = []
+  if (h.details.note) parts.push(h.details.note)
   if (h.details.status) parts.push(`status: ${h.details.status.replace(/_/g, ' ')}`)
   if (h.details.changed?.length) parts.push(`changed: ${h.details.changed.join(', ').replace(/_/g, ' ')}`)
   return `${VERBS[h.action] ?? h.action}${parts.length ? ' — ' + parts.join(' · ') : ''}`
 }
 
-export default function PostDetail({ post, campaigns, onBack, onEdit, onReschedule, onDelete, onSaveCampaign, onError, canEdit, canDelete, canAssignCampaign }: Props) {
+export default function PostDetail({ post, campaigns, onBack, onEdit, onReschedule, onDelete, onSaveCampaign, onError, canEdit, canDelete, canAssignCampaign, canReconcile, onReconcile }: Props) {
   const [campaignId, setCampaignId] = useState(post.campaign_id || '')
   const [history, setHistory] = useState<HistoryEntry[] | null>(null)
   const [moreHistory, setMoreHistory] = useState(false)
@@ -79,7 +83,7 @@ export default function PostDetail({ post, campaigns, onBack, onEdit, onReschedu
       <div className="section-head">
         <div>
           <div className="post-meta">
-            <span className={`status ${post.status}`}>{post.status.replace(/_/g, ' ')}</span>
+            <span className={`status ${post.status}`}>{postStatusLabel(post.status)}</span>
             <span>{post.channels.join(' · ') || 'No channel'}</span>
           </div>
           <h2>{heading}</h2>
@@ -87,11 +91,12 @@ export default function PostDetail({ post, campaigns, onBack, onEdit, onReschedu
         <div className="row-actions">
           {canEdit && editable && <button className="secondary" onClick={() => onEdit(post)}><Pencil size={15} /> Edit post</button>}
           {canEdit && post.status === 'failed' && <button className="secondary" onClick={() => onReschedule(post)}><CalendarClock size={15} /> Reschedule</button>}
-          {canDelete && <button className="icon-button" title="Delete local record (only after it is absent from Facebook)" aria-label="Delete post" onClick={() => onDelete(post.id)}><Trash2 size={16} /></button>}
+          {canDelete && !isPublishingRisk(post.status) && <button className="icon-button" title="Delete local record (only after it is absent from Facebook)" aria-label="Delete post" onClick={() => onDelete(post.id)}><Trash2 size={16} /></button>}
         </div>
       </div>
 
-      {!editable && (
+      {isPublishingRisk(post.status) && <div className="publishing-warning"><div><b>{postStatusLabel(post.status)}</b><p>{publishingMessage(post.status)}</p></div>{canReconcile && <button className="secondary" onClick={onReconcile}>Review in App Settings</button>}</div>}
+      {!editable && !isPublishingRisk(post.status) && (
         <div className="lock-banner">
           <Lock size={16} />
           {published

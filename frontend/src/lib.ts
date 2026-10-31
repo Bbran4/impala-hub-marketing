@@ -2,7 +2,7 @@ export type { Media, Campaign, Post, HistoryEntry } from "./marketingTypes";
 import type { Media, Post } from "./marketingTypes";
 export { KEY_STORAGE, getKey, AuthError } from "./serviceTransport";
 export { supabase, supabaseConfigured } from "./supabase";
-// Only these statuses can be fully edited. Scheduled and published posts only allow a campaign change.
+// Only these statuses can be fully edited. Other lifecycle states require trusted publishing actions; campaign assignment remains separate.
 export const EDITABLE = ["draft", "awaiting_approval", "failed"];
 
 export const mediaSrc = (m: Media) => m.url;
